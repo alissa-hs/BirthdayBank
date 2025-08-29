@@ -42,6 +42,8 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import java.io.InputStream;
 import java.time.LocalDate;
+import java.time.Year;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 
 import lombok.RequiredArgsConstructor;
@@ -137,28 +139,38 @@ public class SavingsAccountsApiResource {
             @QueryParam("limit") @Parameter(description = "limit") final Integer limit,
             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
             @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder,
-            @QueryParam("dateOfBirth") @Parameter(description = "dateOfBirth") final String dateOfBirth) throws IllegalArgumentException {
+            @QueryParam("dayOfBirth") @Parameter(description = "dayOfBirth") final Integer dayOfBirth,
+            @QueryParam("monthOfBirth") @Parameter(description = "monthOfBirth") final Integer monthOfBirth
+    ) throws IllegalArgumentException {
 
         log.error("***** retrieveAll API called *****");
-        log.info("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}",
-                sqlSearch, externalId, offset, limit, orderBy, sortOrder, dateOfBirth);
+        log.error("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}, monthOfBirth: {}",
+                sqlSearch, externalId, offset, limit, orderBy, sortOrder, dayOfBirth, monthOfBirth);
 
         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
 
-        // Validate dateOfBirth format if provided
-        if (StringUtils.isNotBlank(dateOfBirth)) {
-            log.error("dateOfBirth not blank");
+        if (monthOfBirth == null || dayOfBirth == null) {
+            throw new IllegalArgumentException("Both the month and date must be provided together to query on a date");
+        }
+
+        if (monthOfBirth != null && dayOfBirth != null) {
             try {
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy").withLocale(Locale.ENGLISH);
-                LocalDate parsedDate = LocalDate.parse(dateOfBirth, formatter);
-                log.error("Parsed dateOfBirth successfully: {}", parsedDate);
+                int currentYear = Year.now().getValue();
+                YearMonth yearMonth = YearMonth.of(currentYear, monthOfBirth);
+                int maxDay = yearMonth.lengthOfMonth();
+
+                if (dayOfBirth < 1 || dayOfBirth > maxDay) {
+                    throw new IllegalArgumentException("Invalid date for the month provided: " + dayOfBirth);
+                }
+                if (monthOfBirth < 1 || monthOfBirth > 12) {
+                    throw new IllegalArgumentException("Invalid month provided: " + monthOfBirth);
+                }
             } catch (Exception e) {
-                log.error("Failed to parse dateOfBirth='{}': {}", dateOfBirth, e.getMessage());
-                throw new IllegalArgumentException(e.getMessage());
+                throw new IllegalArgumentException("Invalid date of month: " + dayOfBirth);
             }
         }
 
-        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder, dateOfBirth);
+        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder, dayOfBirth, monthOfBirth);
 
         final Page<SavingsAccountData> products = savingsAccountReadPlatformService.retrieveAll(searchParameters);
 
