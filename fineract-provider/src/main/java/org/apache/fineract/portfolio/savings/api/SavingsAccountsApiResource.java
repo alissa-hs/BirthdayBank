@@ -41,10 +41,9 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.domain.CommandWrapper;
@@ -72,8 +71,16 @@ import org.apache.fineract.portfolio.savings.service.SavingsAccountChargeReadPla
 import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
+import java.time.format.DateTimeParseException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 @Path("/v1/savingsaccounts")
 @Component
@@ -89,6 +96,7 @@ public class SavingsAccountsApiResource {
     private final SavingsAccountChargeReadPlatformService savingsAccountChargeReadPlatformService;
     private final BulkImportWorkbookService bulkImportWorkbookService;
     private final BulkImportWorkbookPopulatorService bulkImportWorkbookPopulatorService;
+    private static final Logger log = LoggerFactory.getLogger(SavingsAccountsApiResource.class);
 
     @GET
     @Path("template")
@@ -128,11 +136,28 @@ public class SavingsAccountsApiResource {
             @QueryParam("offset") @Parameter(description = "offset") final Integer offset,
             @QueryParam("limit") @Parameter(description = "limit") final Integer limit,
             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
-            @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder) {
+            @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder,
+            @QueryParam("dateOfBirth") @Parameter(description = "dateOfBirth") final String dateOfBirth) {
+
+        log.error("***** retrieveAll API called *****");
+        log.info("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}",
+                sqlSearch, externalId, offset, limit, orderBy, sortOrder, dateOfBirth);
 
         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
 
-        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder);
+        // Validate dateOfBirth format if provided
+        if (StringUtils.isNotBlank(dateOfBirth)) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy").withLocale(Locale.ENGLISH);
+                LocalDate parsedDate = LocalDate.parse(dateOfBirth, formatter);
+                log.info("Parsed dateOfBirth successfully: {}", parsedDate);
+            } catch (DateTimeParseException e) {
+                log.error("Failed to parse dateOfBirth='{}': {}", dateOfBirth, e.getMessage());
+                throw new IllegalArgumentException("dateOfBirth format must be 'dd MMMM yyyy'", e);
+            }
+        }
+
+        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder, dateOfBirth);
 
         final Page<SavingsAccountData> products = savingsAccountReadPlatformService.retrieveAll(searchParameters);
 
