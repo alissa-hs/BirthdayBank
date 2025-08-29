@@ -88,9 +88,10 @@ public class SavingsAccountsApiResourceTest {
         Page<SavingsAccountData> page = new Page<>(Collections.emptyList(), 0);
         doReturn(page).when(savingsAccountReadPlatformService).retrieveAll(any(SearchParameters.class));
 
-        String validDob = "15 March 1990";
+        Integer dayOfBirth = 3;
+        Integer monthOfBirth = 10;
 
-        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, validDob);
+        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, dayOfBirth, monthOfBirth);
 
         assertEquals("{serialized}", result);
     }
@@ -99,8 +100,11 @@ public class SavingsAccountsApiResourceTest {
     @Test
     void retrieveAll_withInvalidDateOfBirth_shouldThrowException() {
         doReturn(appUser).when(context).authenticatedUser();
+        Integer dayOfBirth = 0;
+        Integer monthOfBirth = 0;
+
         assertThrows(IllegalArgumentException.class, () -> {
-            savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, "1990-03-15");
+            savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, dayOfBirth, monthOfBirth);
         });
 
         verify(savingsAccountReadPlatformService, never()).retrieveAll(any());
@@ -119,7 +123,7 @@ public class SavingsAccountsApiResourceTest {
         Page<SavingsAccountData> page = new Page<>(Collections.emptyList(), 0);
         doReturn(page).when(savingsAccountReadPlatformService).retrieveAll(any(SearchParameters.class));
 
-        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, null);
+        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, null, null);
 
         assertEquals("{serialized}", result);
         verify(savingsAccountReadPlatformService, times(1)).retrieveAll(any(SearchParameters.class));

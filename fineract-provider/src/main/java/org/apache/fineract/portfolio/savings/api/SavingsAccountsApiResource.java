@@ -149,7 +149,7 @@ public class SavingsAccountsApiResource {
 
         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
 
-        if (monthOfBirth == null || dayOfBirth == null) {
+        if ((monthOfBirth == null && dayOfBirth != null) || (monthOfBirth != null && dayOfBirth == null)) {
             throw new IllegalArgumentException("Both the month and date must be provided together to query on a date");
         }
 
