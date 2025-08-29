@@ -589,6 +589,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                     final boolean enforceMinRequiredBalance = rs.getBoolean("enforceMinRequiredBalance");
                     final BigDecimal maxAllowedLienLimit = JdbcSupport.getBigDecimalDefaultToNullIfZero(rs, "maxAllowedLienLimit");
                     final boolean lienAllowed = rs.getBoolean("lienAllowed");
+                    final LocalDate clientDateOfBirth = null;
                     savingsAccountData = SavingsAccountData.instance(id, accountNo, depositType, externalId, null, null, null, null,
                             productId, null, null, null, status, subStatus, null, timeline, currency, nominalAnnualInterestRate,
                             interestCompoundingPeriodType, interestPostingPeriodType, interestCalculationType,
@@ -597,7 +598,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                             enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation, onHoldFunds,
                             nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroupData,
                             lastActiveTransactionDate, isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat,
-                            onHoldAmount);
+                            onHoldAmount, clientDateOfBirth);
 
                     savingsAccountData.setClientData(clientData);
                     savingsAccountData.setGroupGeneralData(groupGeneralData);
@@ -757,6 +758,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
             sqlBuilder.append("sa.id as id, sa.account_no as accountNo, sa.external_id as externalId, ");
             sqlBuilder.append("sa.deposit_type_enum as depositType, ");
             sqlBuilder.append("c.id as clientId, c.display_name as clientName, ");
+            sqlBuilder.append("c.date_of_birth as clientDateOfBirth, ");
             sqlBuilder.append("g.id as groupId, g.display_name as groupName, ");
             sqlBuilder.append("sp.id as productId, sp.name as productName, ");
             sqlBuilder.append("s.id fieldOfficerId, s.display_name as fieldOfficerName, ");
@@ -1068,6 +1070,11 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
             final boolean withHoldTax = rs.getBoolean("withHoldTax");
             final Long taxGroupId = JdbcSupport.getLong(rs, "taxGroupId");
             final String taxGroupName = rs.getString("taxGroupName");
+
+            final LocalDate clientDateOfBirth = rs.getDate("clientDateOfBirth") != null
+                    ? rs.getDate("clientDateOfBirth").toLocalDate()
+                    : null;
+
             TaxGroupData taxGroupData = null;
             if (taxGroupId != null) {
                 taxGroupData = TaxGroupData.lookup(taxGroupId, taxGroupName);
@@ -1080,7 +1087,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                     withdrawalFeeForTransfers, summary, allowOverdraft, overdraftLimit, minRequiredBalance, enforceMinRequiredBalance,
                     maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation, onHoldFunds, nominalAnnualInterestRateOverdraft,
                     minOverdraftForInterestCalculation, withHoldTax, taxGroupData, lastActiveTransactionDate, isDormancyTrackingActive,
-                    daysToInactive, daysToDormancy, daysToEscheat, onHoldAmount);
+                    daysToInactive, daysToDormancy, daysToEscheat, onHoldAmount, clientDateOfBirth);
         }
     }
 
@@ -1658,6 +1665,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
             final Integer daysToInactive = null;
             final Integer daysToDormancy = null;
             final Integer daysToEscheat = null;
+            final LocalDate clientDateOfBirth = null;
 
             final SavingsAccountApplicationTimelineData timeline = SavingsAccountApplicationTimelineData.templateDefault();
             final EnumOptionData depositType = null;
@@ -1668,7 +1676,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                     withdrawalFeeForTransfers, summary, allowOverdraft, overdraftLimit, minRequiredBalance, enforceMinRequiredBalance,
                     maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation, onHoldFunds, nominalAnnualInterestRateOverdraft,
                     minOverdraftForInterestCalculation, withHoldTax, taxGroupData, lastActiveTransactionDate, isDormancyTrackingActive,
-                    daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold);
+                    daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold, clientDateOfBirth);
         }
     }
 
