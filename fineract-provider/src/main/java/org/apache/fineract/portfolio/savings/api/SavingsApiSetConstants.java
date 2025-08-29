@@ -47,7 +47,7 @@ public class SavingsApiSetConstants extends SavingsApiConstants {
      * These parameters will match the class level parameters of {@link SavingsAccountData}. Where possible, we try to
      * get response parameters to match those of request parameters.
      */
-    protected static final Set<String> SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS = new HashSet<>(Arrays.asList(idParamName,
+    public static final Set<String> SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS = new HashSet<>(Arrays.asList(idParamName,
             accountNoParamName, externalIdParamName, statusParamName, activatedOnDateParamName, staffIdParamName, clientIdParamName,
             "clientName", groupIdParamName, "groupName", "savingsProductId", "savingsProductName", "currency",
             nominalAnnualInterestRateParamName, interestCompoundingPeriodTypeParamName, interestCalculationTypeParamName,

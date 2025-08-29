@@ -137,7 +137,7 @@ public class SavingsAccountsApiResource {
             @QueryParam("limit") @Parameter(description = "limit") final Integer limit,
             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
             @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder,
-            @QueryParam("dateOfBirth") @Parameter(description = "dateOfBirth") final String dateOfBirth) {
+            @QueryParam("dateOfBirth") @Parameter(description = "dateOfBirth") final String dateOfBirth) throws IllegalArgumentException {
 
         log.error("***** retrieveAll API called *****");
         log.info("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}",
@@ -147,13 +147,14 @@ public class SavingsAccountsApiResource {
 
         // Validate dateOfBirth format if provided
         if (StringUtils.isNotBlank(dateOfBirth)) {
+            log.error("dateOfBirth not blank");
             try {
                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy").withLocale(Locale.ENGLISH);
                 LocalDate parsedDate = LocalDate.parse(dateOfBirth, formatter);
-                log.info("Parsed dateOfBirth successfully: {}", parsedDate);
-            } catch (DateTimeParseException e) {
+                log.error("Parsed dateOfBirth successfully: {}", parsedDate);
+            } catch (Exception e) {
                 log.error("Failed to parse dateOfBirth='{}': {}", dateOfBirth, e.getMessage());
-                throw new IllegalArgumentException("dateOfBirth format must be 'dd MMMM yyyy'", e);
+                throw new IllegalArgumentException(e.getMessage());
             }
         }
 
