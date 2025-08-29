@@ -195,7 +195,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
         sqlBuilder.append(" join m_office o on o.id = c.office_id");
         sqlBuilder.append(" where o.hierarchy like ?");
 
-        final Object[] objectArray = new Object[2];
+        final Object[] objectArray = new Object[10];
         objectArray[0] = hierarchySearchString;
         int arrayPos = 1;
         if (searchParameters != null) {
@@ -216,12 +216,15 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
                 objectArray[arrayPos] = searchParameters.getOfficeId();
                 arrayPos = arrayPos + 1;
             }
-            if (StringUtils.isNotBlank(searchParameters.getDateOfBirth())) {
-                sqlBuilder.append(" and c.date_of_birth = ?");
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.ENGLISH);
-                LocalDate dob = LocalDate.parse(searchParameters.getDateOfBirth(), formatter);
-                objectArray[arrayPos] = java.sql.Date.valueOf(dob);
-                arrayPos++;
+            if (searchParameters.getMonthOfBirth() != null) {
+                sqlBuilder.append(" and MONTH(c.date_of_birth) = ?");
+                objectArray[arrayPos] = searchParameters.getMonthOfBirth();
+                arrayPos = arrayPos + 1;
+            }
+            if (searchParameters.getDayOfBirth() != null) {
+                sqlBuilder.append(" and DAY(c.date_of_birth) = ?");
+                objectArray[arrayPos] = searchParameters.getDayOfBirth();
+                arrayPos = arrayPos + 1;
             }
             if (searchParameters.isOrderByRequested()) {
                 sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
