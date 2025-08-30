@@ -1,0 +1,1184 @@
+From b92c4f4beaf90c6672f7e01c0cc83584d03310ac Mon Sep 17 00:00:00 2001
+From: alissa-hs <ahsth3636@gmail.com>
+Date: Wed, 27 Aug 2025 22:54:14 -0400
+Subject: [PATCH 1/8] Set up
+
+---
+ build.gradle                                         | 12 ++++++++++--
+ .../src/main/resources/application.properties        | 12 ++++++++----
+ gradle/wrapper/gradle-wrapper.properties             |  3 ++-
+ 3 files changed, 20 insertions(+), 7 deletions(-)
+
+diff --git a/build.gradle b/build.gradle
+index 0904122ed..55e53a95a 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -18,6 +18,14 @@
+  */
+ // TODO: this is work in progress, please follow FINERACT-1171
+ buildscript {
++    configurations.classpath {
++        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
++            if (details.requested.group == 'com.burgstaller' && details.requested.name == 'okhttp-digest' && details.requested.version == '1.10') {
++                details.useTarget "io.github.rburgst:${details.requested.name}:1.21"
++                details.because 'Dependency has moved'
++            }
++        }
++    }
+     ext {
+         jacocoVersion = '0.8.10'
+         retrofitVersion = '2.9.0'
+@@ -547,8 +555,8 @@ configure(project.fineractJavaProjects) {
+             exclude(module: "slf4j-api")
+         }
+ 
+-        compileOnly 'org.projectlombok:lombok'
+-        annotationProcessor 'org.projectlombok:lombok'
++        compileOnly 'org.projectlombok:lombok:1.18.34'
++        annotationProcessor 'org.projectlombok:lombok:1.18.34'
+ 
+         testImplementation( 'org.mockito:mockito-core',
+                 'org.mockito:mockito-junit-jupiter',
+diff --git a/fineract-provider/src/main/resources/application.properties b/fineract-provider/src/main/resources/application.properties
+index 77b59ad1a..3054c0f4d 100644
+--- a/fineract-provider/src/main/resources/application.properties
++++ b/fineract-provider/src/main/resources/application.properties
+@@ -186,7 +186,8 @@ management.endpoints.web.exposure.include=${FINERACT_MANAGEMENT_ENDPOINT_WEB_EXP
+ # FINERACT-914
+ server.forward-headers-strategy=framework
+ server.port=${FINERACT_SERVER_PORT:8443}
+-server.servlet.context-path=${FINERACT_SERVER_SERVLET_CONTEXT_PATH:/fineract-provider}
++server.servlet.context-path=/fineract-provider
++#server.servlet.context-path=${FINERACT_SERVER_SERVLET_CONTEXT_PATH:/fineract-provider}
+ server.compression.enabled=${FINERACT_SERVER_COMPRESSION_ENABLED:true}
+ 
+ server.ssl.enabled=${FINERACT_SERVER_SSL_ENABLED:true}
+@@ -212,9 +213,12 @@ server.tomcat.threads.min-spare=${FINERACT_SERVER_TOMCAT_THREADS_MIN_SPARE:10}
+ spring.security.oauth2.resourceserver.jwt.issuer-uri=${FINERACT_SERVER_OAUTH_RESOURCE_URL:http://localhost:9000/auth/realms/fineract}
+ 
+ spring.datasource.hikari.driverClassName=${FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME:org.mariadb.jdbc.Driver}
+-spring.datasource.hikari.jdbcUrl=${FINERACT_HIKARI_JDBC_URL:jdbc:mariadb://localhost:3306/fineract_tenants}
+-spring.datasource.hikari.username=${FINERACT_HIKARI_USERNAME:root}
+-spring.datasource.hikari.password=${FINERACT_HIKARI_PASSWORD:mysql}
++spring.datasource.hikari.jdbcUrl=jdbc:mariadb://localhost:3306/fineract_tenants?useSSL=false
++#spring.datasource.hikari.jdbcUrl=${FINERACT_HIKARI_JDBC_URL:jdbc:mariadb://localhost:3306/fineract_tenants}
++#spring.datasource.hikari.username=${FINERACT_HIKARI_USERNAME:root}
++#spring.datasource.hikari.password=${FINERACT_HIKARI_PASSWORD:mysql}
++spring.datasource.hikari.username=fineract
++spring.datasource.hikari.password=fineract
+ spring.datasource.hikari.minimumIdle=${FINERACT_HIKARI_MINIMUM_IDLE:3}
+ spring.datasource.hikari.maximumPoolSize=${FINERACT_HIKARI_MAXIMUM_POOL_SIZE:10}
+ spring.datasource.hikari.idleTimeout=${FINERACT_HIKARI_IDLE_TIMEOUT:60000}
+diff --git a/gradle/wrapper/gradle-wrapper.properties b/gradle/wrapper/gradle-wrapper.properties
+index 15de90249..238018578 100644
+--- a/gradle/wrapper/gradle-wrapper.properties
++++ b/gradle/wrapper/gradle-wrapper.properties
+@@ -1,5 +1,6 @@
++#Wed Aug 27 20:49:19 EDT 2025
+ distributionBase=GRADLE_USER_HOME
+ distributionPath=wrapper/dists
+-distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
++distributionUrl=https\://services.gradle.org/distributions/gradle-8.14-bin.zip
+ zipStoreBase=GRADLE_USER_HOME
+ zipStorePath=wrapper/dists
+-- 
+2.39.3 (Apple Git-145)
+
+
+From b9b6c3997654321b719b1c726cdc866f9a62842c Mon Sep 17 00:00:00 2001
+From: alissa-hs <ahsth3636@gmail.com>
+Date: Fri, 29 Aug 2025 12:00:12 -0400
+Subject: [PATCH 2/8] Added queryParam dateOfBirth to
+ SavingsAccountsApiResource; working when querying date, month, and year
+
+---
+ .../core/service/SearchParameters.java        | 51 +++++++++++++++++--
+ .../api/SavingsAccountsApiResource.java       | 37 +++++++++++---
+ ...SavingsAccountReadPlatformServiceImpl.java | 10 ++++
+ 3 files changed, 87 insertions(+), 11 deletions(-)
+
+diff --git a/fineract-core/src/main/java/org/apache/fineract/infrastructure/core/service/SearchParameters.java b/fineract-core/src/main/java/org/apache/fineract/infrastructure/core/service/SearchParameters.java
+index c0b6c80b6..c69596802 100644
+--- a/fineract-core/src/main/java/org/apache/fineract/infrastructure/core/service/SearchParameters.java
++++ b/fineract-core/src/main/java/org/apache/fineract/infrastructure/core/service/SearchParameters.java
+@@ -44,6 +44,8 @@ public final class SearchParameters {
+     private final Long savingsId;
+     private final Boolean orphansOnly;
+ 
++    private final String dateOfBirth;
++
+     // Provisning Entries Search Params
+     private final Long provisioningEntryId;
+     private final Long productId;
+@@ -58,8 +60,9 @@ public final class SearchParameters {
+         final Long savingsId = null;
+         final Boolean orphansOnly = false;
+         final boolean isSelfUser = false;
++        final String dateOfBirth = null;
+         return new SearchParameters(sqlSearch, officeId, externalId, name, hierarchy, null, null, null, null, null, null, staffId,
+-                accountNo, loanId, savingsId, orphansOnly, isSelfUser);
++                accountNo, loanId, savingsId, orphansOnly, isSelfUser, dateOfBirth);
+     }
+ 
+     public static SearchParameters forClients(final String sqlSearch, final Long officeId, final String externalId,
+@@ -182,7 +185,7 @@ public final class SearchParameters {
+     }
+ 
+     public static SearchParameters forSavings(final String sqlSearch, final String externalId, final Integer offset, final Integer limit,
+-            final String orderBy, final String sortOrder) {
++            final String orderBy, final String sortOrder, final String dateOfBirth) {
+ 
+         final Integer maxLimitAllowed = getCheckedLimit(limit);
+         final Long staffId = null;
+@@ -193,7 +196,7 @@ public final class SearchParameters {
+         final boolean isSelfUser = false;
+ 
+         return new SearchParameters(sqlSearch, null, externalId, null, null, null, null, offset, maxLimitAllowed, orderBy, sortOrder,
+-                staffId, accountNo, loanId, savingsId, orphansOnly, isSelfUser);
++                staffId, accountNo, loanId, savingsId, orphansOnly, isSelfUser, dateOfBirth);
+     }
+ 
+     public static SearchParameters forAccountTransfer(final String sqlSearch, final String externalId, final Integer offset,
+@@ -269,9 +272,41 @@ public final class SearchParameters {
+         this.categoryId = null;
+         this.isSelfUser = isSelfUser;
+         this.status = null;
++        this.dateOfBirth = null;
+ 
+     }
+ 
++    private SearchParameters(final String sqlSearch, final Long officeId, final String externalId, final String name,
++                             final String hierarchy, final String firstname, final String lastname, final Integer offset, final Integer limit,
++                             final String orderBy, final String sortOrder, final Long staffId, final String accountNo, final Long loanId,
++                             final Long savingsId, final Boolean orphansOnly, boolean isSelfUser, String dateOfBirth) {
++        this.sqlSearch = sqlSearch;
++        this.officeId = officeId;
++        this.externalId = externalId;
++        this.name = name;
++        this.hierarchy = hierarchy;
++        this.firstname = firstname;
++        this.lastname = lastname;
++        this.offset = offset;
++        this.limit = limit;
++        this.orderBy = orderBy;
++        this.sortOrder = sortOrder;
++        this.staffId = staffId;
++        this.accountNo = accountNo;
++        this.loanId = loanId;
++        this.savingsId = savingsId;
++        this.orphansOnly = orphansOnly;
++        this.currencyCode = null;
++        this.provisioningEntryId = null;
++        this.productId = null;
++        this.categoryId = null;
++        this.isSelfUser = isSelfUser;
++        this.status = null;
++        this.dateOfBirth = dateOfBirth;
++
++    }
++
++
+     private SearchParameters(final String sqlSearch, final Long officeId, final String externalId, final String name,
+             final String hierarchy, final String firstname, final String lastname, final String status, final Integer offset,
+             final Integer limit, final String orderBy, final String sortOrder, final Long staffId, final String accountNo,
+@@ -298,6 +333,7 @@ public final class SearchParameters {
+         this.categoryId = null;
+         this.isSelfUser = isSelfUser;
+         this.status = status;
++        this.dateOfBirth = null;
+ 
+     }
+ 
+@@ -327,6 +363,7 @@ public final class SearchParameters {
+         this.categoryId = null;
+         this.isSelfUser = isSelfUser;
+         this.status = null;
++        this.dateOfBirth = null;
+     }
+ 
+     private SearchParameters(final Long provisioningEntryId, final Long officeId, final Long productId, final Long categoryId,
+@@ -353,6 +390,7 @@ public final class SearchParameters {
+         this.categoryId = categoryId;
+         this.isSelfUser = false;
+         this.status = null;
++        this.dateOfBirth = null;
+ 
+     }
+ 
+@@ -382,6 +420,7 @@ public final class SearchParameters {
+         this.categoryId = null;
+         this.isSelfUser = false;
+         this.status = null;
++        this.dateOfBirth = null;
+ 
+     }
+ 
+@@ -509,6 +548,8 @@ public final class SearchParameters {
+         return this.savingsId;
+     }
+ 
++    public String getDateOfBirth() { return this.dateOfBirth; }
++
+     public Boolean isOrphansOnly() {
+         if (this.orphansOnly != null) {
+             return this.orphansOnly;
+@@ -554,7 +595,7 @@ public final class SearchParameters {
+         final Integer maxLimitAllowed = getCheckedLimit(limit);
+ 
+         return new SearchParameters(null, null, null, null, null, null, null, offset, maxLimitAllowed, orderBy, sortOrder, null, null, null,
+-                null, null, false);
++                null, null, false, null);
+     }
+ 
+     /**
+@@ -567,6 +608,6 @@ public final class SearchParameters {
+         final Integer maxLimitAllowed = getCheckedLimit(limit);
+ 
+         return new SearchParameters(null, null, null, null, null, null, null, offset, maxLimitAllowed, orderBy, sortOrder, null, null, null,
+-                null, null, false);
++                null, null, false, null);
+     }
+ }
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+index b4ca5f24d..43b40ad21 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+@@ -41,10 +41,9 @@ import jakarta.ws.rs.core.MediaType;
+ import jakarta.ws.rs.core.Response;
+ import jakarta.ws.rs.core.UriInfo;
+ import java.io.InputStream;
+-import java.util.Arrays;
+-import java.util.Collection;
+-import java.util.HashSet;
+-import java.util.Set;
++import java.time.LocalDate;
++import java.time.format.DateTimeFormatter;
++
+ import lombok.RequiredArgsConstructor;
+ import org.apache.commons.lang3.StringUtils;
+ import org.apache.fineract.commands.domain.CommandWrapper;
+@@ -72,8 +71,16 @@ import org.apache.fineract.portfolio.savings.service.SavingsAccountChargeReadPla
+ import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
+ import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
+ import org.glassfish.jersey.media.multipart.FormDataParam;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
+ import org.springframework.stereotype.Component;
+ import org.springframework.util.CollectionUtils;
++import java.time.format.DateTimeParseException;
++import java.util.Arrays;
++import java.util.Collection;
++import java.util.HashSet;
++import java.util.Locale;
++import java.util.Set;
+ 
+ @Path("/v1/savingsaccounts")
+ @Component
+@@ -89,6 +96,7 @@ public class SavingsAccountsApiResource {
+     private final SavingsAccountChargeReadPlatformService savingsAccountChargeReadPlatformService;
+     private final BulkImportWorkbookService bulkImportWorkbookService;
+     private final BulkImportWorkbookPopulatorService bulkImportWorkbookPopulatorService;
++    private static final Logger log = LoggerFactory.getLogger(SavingsAccountsApiResource.class);
+ 
+     @GET
+     @Path("template")
+@@ -128,11 +136,28 @@ public class SavingsAccountsApiResource {
+             @QueryParam("offset") @Parameter(description = "offset") final Integer offset,
+             @QueryParam("limit") @Parameter(description = "limit") final Integer limit,
+             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
+-            @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder) {
++            @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder,
++            @QueryParam("dateOfBirth") @Parameter(description = "dateOfBirth") final String dateOfBirth) {
++
++        log.error("***** retrieveAll API called *****");
++        log.info("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}",
++                sqlSearch, externalId, offset, limit, orderBy, sortOrder, dateOfBirth);
+ 
+         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
+ 
+-        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder);
++        // Validate dateOfBirth format if provided
++        if (StringUtils.isNotBlank(dateOfBirth)) {
++            try {
++                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy").withLocale(Locale.ENGLISH);
++                LocalDate parsedDate = LocalDate.parse(dateOfBirth, formatter);
++                log.info("Parsed dateOfBirth successfully: {}", parsedDate);
++            } catch (DateTimeParseException e) {
++                log.error("Failed to parse dateOfBirth='{}': {}", dateOfBirth, e.getMessage());
++                throw new IllegalArgumentException("dateOfBirth format must be 'dd MMMM yyyy'", e);
++            }
++        }
++
++        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder, dateOfBirth);
+ 
+         final Page<SavingsAccountData> products = savingsAccountReadPlatformService.retrieveAll(searchParameters);
+ 
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
+index 0bce93194..bccde2852 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
+@@ -22,6 +22,7 @@ import java.math.BigDecimal;
+ import java.sql.ResultSet;
+ import java.sql.SQLException;
+ import java.time.LocalDate;
++import java.time.format.DateTimeFormatter;
+ import java.time.temporal.ChronoUnit;
+ import java.util.ArrayList;
+ import java.util.Arrays;
+@@ -29,6 +30,8 @@ import java.util.Collection;
+ import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.List;
++import java.util.Locale;
++
+ import org.apache.commons.lang3.StringUtils;
+ import org.apache.fineract.accounting.common.AccountingRuleType;
+ import org.apache.fineract.accounting.glaccount.data.GLAccountData;
+@@ -213,6 +216,13 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+                 objectArray[arrayPos] = searchParameters.getOfficeId();
+                 arrayPos = arrayPos + 1;
+             }
++            if (StringUtils.isNotBlank(searchParameters.getDateOfBirth())) {
++                sqlBuilder.append(" and c.date_of_birth = ?");
++                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.ENGLISH);
++                LocalDate dob = LocalDate.parse(searchParameters.getDateOfBirth(), formatter);
++                objectArray[arrayPos] = java.sql.Date.valueOf(dob);
++                arrayPos++;
++            }
+             if (searchParameters.isOrderByRequested()) {
+                 sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
+                 this.columnValidator.validateSqlInjection(sqlBuilder.toString(), searchParameters.getOrderBy());
+-- 
+2.39.3 (Apple Git-145)
+
+
+From 8e75701eade2650343a4ec58098281373e7e4c38 Mon Sep 17 00:00:00 2001
+From: alissa-hs <ahsth3636@gmail.com>
+Date: Fri, 29 Aug 2025 15:21:22 -0400
+Subject: [PATCH 3/8] Added unit tests for testing dateOfBirth functionality
+
+---
+ .../api/SavingsAccountsApiResource.java       |   9 +-
+ .../savings/api/SavingsApiSetConstants.java   |   2 +-
+ .../SavingsAccountsApiResourceTest.java       | 128 ++++++++++++++++++
+ 3 files changed, 134 insertions(+), 5 deletions(-)
+ create mode 100644 fineract-provider/src/test/java/org/apache/fineract/portfolio/savings/SavingsAccountsApiResourceTest.java
+
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+index 43b40ad21..8336d28e0 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+@@ -137,7 +137,7 @@ public class SavingsAccountsApiResource {
+             @QueryParam("limit") @Parameter(description = "limit") final Integer limit,
+             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
+             @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder,
+-            @QueryParam("dateOfBirth") @Parameter(description = "dateOfBirth") final String dateOfBirth) {
++            @QueryParam("dateOfBirth") @Parameter(description = "dateOfBirth") final String dateOfBirth) throws IllegalArgumentException {
+ 
+         log.error("***** retrieveAll API called *****");
+         log.info("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}",
+@@ -147,13 +147,14 @@ public class SavingsAccountsApiResource {
+ 
+         // Validate dateOfBirth format if provided
+         if (StringUtils.isNotBlank(dateOfBirth)) {
++            log.error("dateOfBirth not blank");
+             try {
+                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy").withLocale(Locale.ENGLISH);
+                 LocalDate parsedDate = LocalDate.parse(dateOfBirth, formatter);
+-                log.info("Parsed dateOfBirth successfully: {}", parsedDate);
+-            } catch (DateTimeParseException e) {
++                log.error("Parsed dateOfBirth successfully: {}", parsedDate);
++            } catch (Exception e) {
+                 log.error("Failed to parse dateOfBirth='{}': {}", dateOfBirth, e.getMessage());
+-                throw new IllegalArgumentException("dateOfBirth format must be 'dd MMMM yyyy'", e);
++                throw new IllegalArgumentException(e.getMessage());
+             }
+         }
+ 
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsApiSetConstants.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsApiSetConstants.java
+index bce7d2696..b74a7aca1 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsApiSetConstants.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsApiSetConstants.java
+@@ -47,7 +47,7 @@ public class SavingsApiSetConstants extends SavingsApiConstants {
+      * These parameters will match the class level parameters of {@link SavingsAccountData}. Where possible, we try to
+      * get response parameters to match those of request parameters.
+      */
+-    protected static final Set<String> SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS = new HashSet<>(Arrays.asList(idParamName,
++    public static final Set<String> SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS = new HashSet<>(Arrays.asList(idParamName,
+             accountNoParamName, externalIdParamName, statusParamName, activatedOnDateParamName, staffIdParamName, clientIdParamName,
+             "clientName", groupIdParamName, "groupName", "savingsProductId", "savingsProductName", "currency",
+             nominalAnnualInterestRateParamName, interestCompoundingPeriodTypeParamName, interestCalculationTypeParamName,
+diff --git a/fineract-provider/src/test/java/org/apache/fineract/portfolio/savings/SavingsAccountsApiResourceTest.java b/fineract-provider/src/test/java/org/apache/fineract/portfolio/savings/SavingsAccountsApiResourceTest.java
+new file mode 100644
+index 000000000..e5b0ccd41
+--- /dev/null
++++ b/fineract-provider/src/test/java/org/apache/fineract/portfolio/savings/SavingsAccountsApiResourceTest.java
+@@ -0,0 +1,128 @@
++package org.apache.fineract.portfolio.savings;
++
++
++import jakarta.ws.rs.core.MultivaluedHashMap;
++import jakarta.ws.rs.core.UriInfo;
++import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
++import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
++import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
++import org.apache.fineract.infrastructure.core.service.Page;
++import org.apache.fineract.infrastructure.core.service.SearchParameters;
++import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
++import org.apache.fineract.portfolio.savings.api.SavingsAccountsApiResource;
++import org.apache.fineract.portfolio.savings.api.SavingsApiSetConstants;
++import org.apache.fineract.portfolio.savings.data.SavingsAccountData;
++import org.apache.fineract.portfolio.savings.service.SavingsAccountReadPlatformService;
++import org.apache.fineract.useradministration.domain.AppUser;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.extension.ExtendWith;
++import org.mockito.Mock;
++import org.mockito.MockitoAnnotations;
++import org.mockito.junit.jupiter.MockitoExtension;
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import java.util.Collections;
++import static org.junit.jupiter.api.Assertions.assertThrows;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.doReturn;
++import static org.mockito.ArgumentMatchers.eq;
++import static org.mockito.Mockito.times;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.never;
++
++
++
++@ExtendWith(MockitoExtension.class)
++public class SavingsAccountsApiResourceTest {
++    @Mock
++    private SavingsAccountReadPlatformService savingsAccountReadPlatformService;
++
++    @Mock
++    private PlatformSecurityContext context;
++
++    @Mock
++    private DefaultToApiJsonSerializer<SavingsAccountData> toApiJsonSerializer;
++
++    @Mock
++    private ApiRequestParameterHelper apiRequestParameterHelper;
++
++    @Mock
++    private UriInfo uriInfo;
++
++    @Mock
++    private AppUser appUser;
++
++    @Mock
++    private ApiRequestJsonSerializationSettings apiRequestJsonSerializationSettings;
++
++
++    private SavingsAccountsApiResource savingsAccountsApiResource;
++
++    @BeforeEach
++    void setUp() {
++        MockitoAnnotations.openMocks(this);
++
++        savingsAccountsApiResource = new SavingsAccountsApiResource(
++                savingsAccountReadPlatformService,
++                context,
++                toApiJsonSerializer,
++                null,
++                apiRequestParameterHelper,
++                null,
++                null,
++                null
++        );
++
++    }
++
++    @Test
++    void retrieveAll_withValidDateOfBirth_shouldPassValidation() {
++        doReturn(appUser).when(context).authenticatedUser();
++        doReturn(new MultivaluedHashMap<String, String>()).when(uriInfo).getQueryParameters();
++        doReturn(apiRequestJsonSerializationSettings).when(apiRequestParameterHelper).process(any());
++        doReturn("{serialized}")
++                .when(toApiJsonSerializer)
++                .serialize(eq(apiRequestJsonSerializationSettings),
++                        any(Page.class),
++                        eq(SavingsApiSetConstants.SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS));
++        Page<SavingsAccountData> page = new Page<>(Collections.emptyList(), 0);
++        doReturn(page).when(savingsAccountReadPlatformService).retrieveAll(any(SearchParameters.class));
++
++        String validDob = "15 March 1990";
++
++        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, validDob);
++
++        assertEquals("{serialized}", result);
++    }
++
++
++    @Test
++    void retrieveAll_withInvalidDateOfBirth_shouldThrowException() {
++        doReturn(appUser).when(context).authenticatedUser();
++        assertThrows(IllegalArgumentException.class, () -> {
++            savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, "1990-03-15");
++        });
++
++        verify(savingsAccountReadPlatformService, never()).retrieveAll(any());
++    }
++
++    @Test
++    void retrieveAll_withNullDateOfBirth_shouldSkipValidation() {
++        doReturn(appUser).when(context).authenticatedUser();
++        doReturn(new MultivaluedHashMap<String, String>()).when(uriInfo).getQueryParameters();
++        doReturn(apiRequestJsonSerializationSettings).when(apiRequestParameterHelper).process(any());
++        doReturn("{serialized}")
++                .when(toApiJsonSerializer)
++                .serialize(eq(apiRequestJsonSerializationSettings),
++                        any(Page.class),
++                        eq(SavingsApiSetConstants.SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS));
++        Page<SavingsAccountData> page = new Page<>(Collections.emptyList(), 0);
++        doReturn(page).when(savingsAccountReadPlatformService).retrieveAll(any(SearchParameters.class));
++
++        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, null);
++
++        assertEquals("{serialized}", result);
++        verify(savingsAccountReadPlatformService, times(1)).retrieveAll(any(SearchParameters.class));
++    }
++
++}
+-- 
+2.39.3 (Apple Git-145)
+
+
+From 6e8bb6d75cc9ca24fbebd6b64755ddc77f3ce856 Mon Sep 17 00:00:00 2001
+From: alissa-hs <ahsth3636@gmail.com>
+Date: Fri, 29 Aug 2025 16:26:56 -0400
+Subject: [PATCH 4/8] Modified API to take in integer for date and month
+
+---
+ .../core/service/SearchParameters.java        | 40 ++++++++++++-------
+ .../api/SavingsAccountsApiResource.java       | 36 +++++++++++------
+ 2 files changed, 49 insertions(+), 27 deletions(-)
+
+diff --git a/fineract-core/src/main/java/org/apache/fineract/infrastructure/core/service/SearchParameters.java b/fineract-core/src/main/java/org/apache/fineract/infrastructure/core/service/SearchParameters.java
+index c69596802..c8dfe7822 100644
+--- a/fineract-core/src/main/java/org/apache/fineract/infrastructure/core/service/SearchParameters.java
++++ b/fineract-core/src/main/java/org/apache/fineract/infrastructure/core/service/SearchParameters.java
+@@ -44,7 +44,8 @@ public final class SearchParameters {
+     private final Long savingsId;
+     private final Boolean orphansOnly;
+ 
+-    private final String dateOfBirth;
++    private final Integer dayOfBirth;
++    private final Integer monthOfBirth;
+ 
+     // Provisning Entries Search Params
+     private final Long provisioningEntryId;
+@@ -60,9 +61,10 @@ public final class SearchParameters {
+         final Long savingsId = null;
+         final Boolean orphansOnly = false;
+         final boolean isSelfUser = false;
+-        final String dateOfBirth = null;
++        final Integer dayOfBirth = null;
++        final Integer monthOfBirth = null;
+         return new SearchParameters(sqlSearch, officeId, externalId, name, hierarchy, null, null, null, null, null, null, staffId,
+-                accountNo, loanId, savingsId, orphansOnly, isSelfUser, dateOfBirth);
++                accountNo, loanId, savingsId, orphansOnly, isSelfUser, dayOfBirth, monthOfBirth);
+     }
+ 
+     public static SearchParameters forClients(final String sqlSearch, final Long officeId, final String externalId,
+@@ -185,7 +187,7 @@ public final class SearchParameters {
+     }
+ 
+     public static SearchParameters forSavings(final String sqlSearch, final String externalId, final Integer offset, final Integer limit,
+-            final String orderBy, final String sortOrder, final String dateOfBirth) {
++            final String orderBy, final String sortOrder, final Integer dayOfBirth, final Integer monthOfBirth) {
+ 
+         final Integer maxLimitAllowed = getCheckedLimit(limit);
+         final Long staffId = null;
+@@ -196,7 +198,7 @@ public final class SearchParameters {
+         final boolean isSelfUser = false;
+ 
+         return new SearchParameters(sqlSearch, null, externalId, null, null, null, null, offset, maxLimitAllowed, orderBy, sortOrder,
+-                staffId, accountNo, loanId, savingsId, orphansOnly, isSelfUser, dateOfBirth);
++                staffId, accountNo, loanId, savingsId, orphansOnly, isSelfUser, dayOfBirth, monthOfBirth);
+     }
+ 
+     public static SearchParameters forAccountTransfer(final String sqlSearch, final String externalId, final Integer offset,
+@@ -272,14 +274,15 @@ public final class SearchParameters {
+         this.categoryId = null;
+         this.isSelfUser = isSelfUser;
+         this.status = null;
+-        this.dateOfBirth = null;
++        this.dayOfBirth = null;
++        this.monthOfBirth = null;
+ 
+     }
+ 
+     private SearchParameters(final String sqlSearch, final Long officeId, final String externalId, final String name,
+                              final String hierarchy, final String firstname, final String lastname, final Integer offset, final Integer limit,
+                              final String orderBy, final String sortOrder, final Long staffId, final String accountNo, final Long loanId,
+-                             final Long savingsId, final Boolean orphansOnly, boolean isSelfUser, String dateOfBirth) {
++                             final Long savingsId, final Boolean orphansOnly, boolean isSelfUser, Integer dayOfBirth, Integer monthOfBirth) {
+         this.sqlSearch = sqlSearch;
+         this.officeId = officeId;
+         this.externalId = externalId;
+@@ -302,7 +305,8 @@ public final class SearchParameters {
+         this.categoryId = null;
+         this.isSelfUser = isSelfUser;
+         this.status = null;
+-        this.dateOfBirth = dateOfBirth;
++        this.dayOfBirth = dayOfBirth;
++        this.monthOfBirth = monthOfBirth;
+ 
+     }
+ 
+@@ -333,7 +337,8 @@ public final class SearchParameters {
+         this.categoryId = null;
+         this.isSelfUser = isSelfUser;
+         this.status = status;
+-        this.dateOfBirth = null;
++        this.dayOfBirth = null;
++        this.monthOfBirth = null;
+ 
+     }
+ 
+@@ -363,7 +368,8 @@ public final class SearchParameters {
+         this.categoryId = null;
+         this.isSelfUser = isSelfUser;
+         this.status = null;
+-        this.dateOfBirth = null;
++        this.dayOfBirth = null;
++        this.monthOfBirth = null;
+     }
+ 
+     private SearchParameters(final Long provisioningEntryId, final Long officeId, final Long productId, final Long categoryId,
+@@ -390,7 +396,8 @@ public final class SearchParameters {
+         this.categoryId = categoryId;
+         this.isSelfUser = false;
+         this.status = null;
+-        this.dateOfBirth = null;
++        this.dayOfBirth = null;
++        this.monthOfBirth = null;
+ 
+     }
+ 
+@@ -420,7 +427,8 @@ public final class SearchParameters {
+         this.categoryId = null;
+         this.isSelfUser = false;
+         this.status = null;
+-        this.dateOfBirth = null;
++        this.dayOfBirth = null;
++        this.monthOfBirth = null;
+ 
+     }
+ 
+@@ -548,7 +556,9 @@ public final class SearchParameters {
+         return this.savingsId;
+     }
+ 
+-    public String getDateOfBirth() { return this.dateOfBirth; }
++    public Integer getDayOfBirth() { return this.dayOfBirth; }
++
++    public Integer getMonthOfBirth() { return this.monthOfBirth; }
+ 
+     public Boolean isOrphansOnly() {
+         if (this.orphansOnly != null) {
+@@ -595,7 +605,7 @@ public final class SearchParameters {
+         final Integer maxLimitAllowed = getCheckedLimit(limit);
+ 
+         return new SearchParameters(null, null, null, null, null, null, null, offset, maxLimitAllowed, orderBy, sortOrder, null, null, null,
+-                null, null, false, null);
++                null, null, false, null, null);
+     }
+ 
+     /**
+@@ -608,6 +618,6 @@ public final class SearchParameters {
+         final Integer maxLimitAllowed = getCheckedLimit(limit);
+ 
+         return new SearchParameters(null, null, null, null, null, null, null, offset, maxLimitAllowed, orderBy, sortOrder, null, null, null,
+-                null, null, false, null);
++                null, null, false, null, null);
+     }
+ }
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+index 8336d28e0..06b5fe3c3 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+@@ -42,6 +42,8 @@ import jakarta.ws.rs.core.Response;
+ import jakarta.ws.rs.core.UriInfo;
+ import java.io.InputStream;
+ import java.time.LocalDate;
++import java.time.Year;
++import java.time.YearMonth;
+ import java.time.format.DateTimeFormatter;
+ 
+ import lombok.RequiredArgsConstructor;
+@@ -137,28 +139,38 @@ public class SavingsAccountsApiResource {
+             @QueryParam("limit") @Parameter(description = "limit") final Integer limit,
+             @QueryParam("orderBy") @Parameter(description = "orderBy") final String orderBy,
+             @QueryParam("sortOrder") @Parameter(description = "sortOrder") final String sortOrder,
+-            @QueryParam("dateOfBirth") @Parameter(description = "dateOfBirth") final String dateOfBirth) throws IllegalArgumentException {
++            @QueryParam("dayOfBirth") @Parameter(description = "dayOfBirth") final Integer dayOfBirth,
++            @QueryParam("monthOfBirth") @Parameter(description = "monthOfBirth") final Integer monthOfBirth
++    ) throws IllegalArgumentException {
+ 
+         log.error("***** retrieveAll API called *****");
+-        log.info("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}",
+-                sqlSearch, externalId, offset, limit, orderBy, sortOrder, dateOfBirth);
++        log.error("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}, monthOfBirth: {}",
++                sqlSearch, externalId, offset, limit, orderBy, sortOrder, dayOfBirth, monthOfBirth);
+ 
+         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
+ 
+-        // Validate dateOfBirth format if provided
+-        if (StringUtils.isNotBlank(dateOfBirth)) {
+-            log.error("dateOfBirth not blank");
++        if (monthOfBirth == null || dayOfBirth == null) {
++            throw new IllegalArgumentException("Both the month and date must be provided together to query on a date");
++        }
++
++        if (monthOfBirth != null && dayOfBirth != null) {
+             try {
+-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy").withLocale(Locale.ENGLISH);
+-                LocalDate parsedDate = LocalDate.parse(dateOfBirth, formatter);
+-                log.error("Parsed dateOfBirth successfully: {}", parsedDate);
++                int currentYear = Year.now().getValue();
++                YearMonth yearMonth = YearMonth.of(currentYear, monthOfBirth);
++                int maxDay = yearMonth.lengthOfMonth();
++
++                if (dayOfBirth < 1 || dayOfBirth > maxDay) {
++                    throw new IllegalArgumentException("Invalid date for the month provided: " + dayOfBirth);
++                }
++                if (monthOfBirth < 1 || monthOfBirth > 12) {
++                    throw new IllegalArgumentException("Invalid month provided: " + monthOfBirth);
++                }
+             } catch (Exception e) {
+-                log.error("Failed to parse dateOfBirth='{}': {}", dateOfBirth, e.getMessage());
+-                throw new IllegalArgumentException(e.getMessage());
++                throw new IllegalArgumentException("Invalid date of month: " + dayOfBirth);
+             }
+         }
+ 
+-        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder, dateOfBirth);
++        final SearchParameters searchParameters = SearchParameters.forSavings(sqlSearch, externalId, offset, limit, orderBy, sortOrder, dayOfBirth, monthOfBirth);
+ 
+         final Page<SavingsAccountData> products = savingsAccountReadPlatformService.retrieveAll(searchParameters);
+ 
+-- 
+2.39.3 (Apple Git-145)
+
+
+From fba30cbaf090536ade8e1c0707278327a03f7428 Mon Sep 17 00:00:00 2001
+From: alissa-hs <ahsth3636@gmail.com>
+Date: Fri, 29 Aug 2025 16:27:08 -0400
+Subject: [PATCH 5/8] Modified API to take in integer for date and month
+
+---
+ .../SavingsAccountReadPlatformServiceImpl.java  | 17 ++++++++++-------
+ 1 file changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
+index bccde2852..c86c82390 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
+@@ -195,7 +195,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+         sqlBuilder.append(" join m_office o on o.id = c.office_id");
+         sqlBuilder.append(" where o.hierarchy like ?");
+ 
+-        final Object[] objectArray = new Object[2];
++        final Object[] objectArray = new Object[10];
+         objectArray[0] = hierarchySearchString;
+         int arrayPos = 1;
+         if (searchParameters != null) {
+@@ -216,12 +216,15 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+                 objectArray[arrayPos] = searchParameters.getOfficeId();
+                 arrayPos = arrayPos + 1;
+             }
+-            if (StringUtils.isNotBlank(searchParameters.getDateOfBirth())) {
+-                sqlBuilder.append(" and c.date_of_birth = ?");
+-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.ENGLISH);
+-                LocalDate dob = LocalDate.parse(searchParameters.getDateOfBirth(), formatter);
+-                objectArray[arrayPos] = java.sql.Date.valueOf(dob);
+-                arrayPos++;
++            if (searchParameters.getMonthOfBirth() != null) {
++                sqlBuilder.append(" and MONTH(c.date_of_birth) = ?");
++                objectArray[arrayPos] = searchParameters.getMonthOfBirth();
++                arrayPos = arrayPos + 1;
++            }
++            if (searchParameters.getDayOfBirth() != null) {
++                sqlBuilder.append(" and DAY(c.date_of_birth) = ?");
++                objectArray[arrayPos] = searchParameters.getDayOfBirth();
++                arrayPos = arrayPos + 1;
+             }
+             if (searchParameters.isOrderByRequested()) {
+                 sqlBuilder.append(" order by ").append(searchParameters.getOrderBy());
+-- 
+2.39.3 (Apple Git-145)
+
+
+From 46704761661f54f6fc080c34a893f85d81bbcb69 Mon Sep 17 00:00:00 2001
+From: alissa-hs <ahsth3636@gmail.com>
+Date: Fri, 29 Aug 2025 16:37:25 -0400
+Subject: [PATCH 6/8] Modify tests to test day and month queryParam; fixed
+ logic for date and month based on tests
+
+---
+ .../savings/api/SavingsAccountsApiResource.java      |  2 +-
+ .../savings/SavingsAccountsApiResourceTest.java      | 12 ++++++++----
+ 2 files changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+index 06b5fe3c3..6e078805b 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+@@ -149,7 +149,7 @@ public class SavingsAccountsApiResource {
+ 
+         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
+ 
+-        if (monthOfBirth == null || dayOfBirth == null) {
++        if ((monthOfBirth == null && dayOfBirth != null) || (monthOfBirth != null && dayOfBirth == null)) {
+             throw new IllegalArgumentException("Both the month and date must be provided together to query on a date");
+         }
+ 
+diff --git a/fineract-provider/src/test/java/org/apache/fineract/portfolio/savings/SavingsAccountsApiResourceTest.java b/fineract-provider/src/test/java/org/apache/fineract/portfolio/savings/SavingsAccountsApiResourceTest.java
+index e5b0ccd41..84de2300e 100644
+--- a/fineract-provider/src/test/java/org/apache/fineract/portfolio/savings/SavingsAccountsApiResourceTest.java
++++ b/fineract-provider/src/test/java/org/apache/fineract/portfolio/savings/SavingsAccountsApiResourceTest.java
+@@ -88,9 +88,10 @@ public class SavingsAccountsApiResourceTest {
+         Page<SavingsAccountData> page = new Page<>(Collections.emptyList(), 0);
+         doReturn(page).when(savingsAccountReadPlatformService).retrieveAll(any(SearchParameters.class));
+ 
+-        String validDob = "15 March 1990";
++        Integer dayOfBirth = 3;
++        Integer monthOfBirth = 10;
+ 
+-        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, validDob);
++        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, dayOfBirth, monthOfBirth);
+ 
+         assertEquals("{serialized}", result);
+     }
+@@ -99,8 +100,11 @@ public class SavingsAccountsApiResourceTest {
+     @Test
+     void retrieveAll_withInvalidDateOfBirth_shouldThrowException() {
+         doReturn(appUser).when(context).authenticatedUser();
++        Integer dayOfBirth = 0;
++        Integer monthOfBirth = 0;
++
+         assertThrows(IllegalArgumentException.class, () -> {
+-            savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, "1990-03-15");
++            savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, dayOfBirth, monthOfBirth);
+         });
+ 
+         verify(savingsAccountReadPlatformService, never()).retrieveAll(any());
+@@ -119,7 +123,7 @@ public class SavingsAccountsApiResourceTest {
+         Page<SavingsAccountData> page = new Page<>(Collections.emptyList(), 0);
+         doReturn(page).when(savingsAccountReadPlatformService).retrieveAll(any(SearchParameters.class));
+ 
+-        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, null);
++        String result = savingsAccountsApiResource.retrieveAll(uriInfo, null, null, null, null, null, null, null, null);
+ 
+         assertEquals("{serialized}", result);
+         verify(savingsAccountReadPlatformService, times(1)).retrieveAll(any(SearchParameters.class));
+-- 
+2.39.3 (Apple Git-145)
+
+
+From 1f843c3609ab0ad9650dedccdeea8b95f23e024e Mon Sep 17 00:00:00 2001
+From: alissa-hs <ahsth3636@gmail.com>
+Date: Fri, 29 Aug 2025 17:18:22 -0400
+Subject: [PATCH 7/8] Added Client's date of birth as part of json response for
+ savings account API
+
+---
+ .../savings/data/SavingsAccountData.java      | 24 ++++++++++++-------
+ .../savings/api/SavingsApiSetConstants.java   |  2 +-
+ ...SavingsAccountReadPlatformServiceImpl.java | 14 ++++++++---
+ 3 files changed, 28 insertions(+), 12 deletions(-)
+
+diff --git a/fineract-core/src/main/java/org/apache/fineract/portfolio/savings/data/SavingsAccountData.java b/fineract-core/src/main/java/org/apache/fineract/portfolio/savings/data/SavingsAccountData.java
+index f24513978..f3a0369ee 100644
+--- a/fineract-core/src/main/java/org/apache/fineract/portfolio/savings/data/SavingsAccountData.java
++++ b/fineract-core/src/main/java/org/apache/fineract/portfolio/savings/data/SavingsAccountData.java
+@@ -92,6 +92,7 @@ public final class SavingsAccountData implements Serializable {
+     private final Integer daysToDormancy;
+     private final Integer daysToEscheat;
+     private final BigDecimal savingsAmountOnHold;
++    private final LocalDate clientDateOfBirth;
+     // associations
+     private final SavingsAccountSummaryData summary;
+     @SuppressWarnings("unused")
+@@ -227,6 +228,7 @@ public final class SavingsAccountData implements Serializable {
+         this.rowIndex = rowIndex;
+         this.submittedOnDate = submittedOnDate;
+         this.savingsAmountOnHold = null;
++        this.clientDateOfBirth = null;
+     }
+ 
+     public static final Comparator<SavingsAccountData> ClientNameComparator = new Comparator<SavingsAccountData>() {
+@@ -491,6 +493,7 @@ public final class SavingsAccountData implements Serializable {
+         this.rowIndex = rowIndex;
+         this.submittedOnDate = submittedOnDate;
+         this.savingsAmountOnHold = null;
++        this.clientDateOfBirth = null;
+     }
+ 
+     public static SavingsAccountData instance(final Long id, final String accountNo, final EnumOptionData depositType,
+@@ -507,7 +510,7 @@ public final class SavingsAccountData implements Serializable {
+             final BigDecimal onHoldFunds, final BigDecimal nominalAnnualInterestRateOverdraft,
+             final BigDecimal minOverdraftForInterestCalculation, final boolean withHoldTax, final TaxGroupData taxGroup,
+             final LocalDate lastActiveTransactionDate, final boolean isDormancyTrackingActive, final Integer daysToInactive,
+-            final Integer daysToDormancy, final Integer daysToEscheat, final BigDecimal savingsAmountOnHold) {
++            final Integer daysToDormancy, final Integer daysToEscheat, final BigDecimal savingsAmountOnHold, final LocalDate clientDateOfBirth) {
+ 
+         final Collection<SavingsProductData> productOptions = null;
+         final Collection<StaffData> fieldOfficerOptions = null;
+@@ -531,7 +534,7 @@ public final class SavingsAccountData implements Serializable {
+                 withdrawalFeeTypeOptions, charges, chargeOptions, allowOverdraft, overdraftLimit, minRequiredBalance,
+                 enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation, onHoldFunds,
+                 nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroup, lastActiveTransactionDate,
+-                isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold);
++                isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold, clientDateOfBirth);
+     }
+ 
+     public static SavingsAccountData lookup(final Long accountId, final String accountNo, final EnumOptionData depositType) {
+@@ -597,6 +600,7 @@ public final class SavingsAccountData implements Serializable {
+         final Integer daysToDormancy = null;
+         final Integer daysToEscheat = null;
+         final BigDecimal savingsAmountOnHold = null;
++        final LocalDate clientDateOfBirth = null;
+ 
+         return new SavingsAccountData(accountId, accountNo, depositType, externalId, groupId, groupName, clientId, clientName, productId,
+                 productName, fieldOfficerId, fieldOfficerName, status, subStatus, reasonForBlock, timeline, currency,
+@@ -607,7 +611,7 @@ public final class SavingsAccountData implements Serializable {
+                 lockinPeriodFrequencyTypeOptions, withdrawalFeeTypeOptions, charges, chargeOptions, allowOverdraft, overdraftLimit,
+                 minRequiredBalance, enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation,
+                 onHoldFunds, nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroup,
+-                lastActiveTransactionDate, isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold);
++                lastActiveTransactionDate, isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold, clientDateOfBirth);
+     }
+ 
+     public static SavingsAccountData lookupWithProductDetails(final Long accountId, final String accountNo,
+@@ -666,6 +670,7 @@ public final class SavingsAccountData implements Serializable {
+         final Integer daysToDormancy = null;
+         final Integer daysToEscheat = null;
+         final BigDecimal savingsAmountOnHold = null;
++        final LocalDate clientDateOfBirth = null;
+ 
+         return new SavingsAccountData(accountId, accountNo, depositType, externalId, groupId, groupName, clientId, clientName, productId,
+                 productName, fieldOfficerId, fieldOfficerName, status, subStatus, reasonForBlock, timeline, currency,
+@@ -676,7 +681,7 @@ public final class SavingsAccountData implements Serializable {
+                 lockinPeriodFrequencyTypeOptions, withdrawalFeeTypeOptions, charges, chargeOptions, allowOverdraft, overdraftLimit,
+                 minRequiredBalance, enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation,
+                 onHoldFunds, nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroup,
+-                lastActiveTransactionDate, isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold);
++                lastActiveTransactionDate, isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold, clientDateOfBirth);
+     }
+ 
+     public static SavingsAccountData withTemplateOptions(final SavingsAccountData account, final SavingsAccountData template,
+@@ -712,7 +717,7 @@ public final class SavingsAccountData implements Serializable {
+                 account.maxAllowedLienLimit, account.lienAllowed, account.minBalanceForInterestCalculation, account.onHoldFunds,
+                 account.nominalAnnualInterestRateOverdraft, account.minOverdraftForInterestCalculation, account.withHoldTax,
+                 account.taxGroup, account.lastActiveTransactionDate, account.isDormancyTrackingActive, account.daysToInactive,
+-                account.daysToDormancy, account.daysToEscheat, account.savingsAmountOnHold);
++                account.daysToDormancy, account.daysToEscheat, account.savingsAmountOnHold, account.clientDateOfBirth);
+     }
+ 
+     public static SavingsAccountData withTemplateOptions(final SavingsAccountData account,
+@@ -739,7 +744,7 @@ public final class SavingsAccountData implements Serializable {
+                 account.minBalanceForInterestCalculation, account.onHoldFunds, account.nominalAnnualInterestRateOverdraft,
+                 account.minOverdraftForInterestCalculation, account.withHoldTax, account.taxGroup, account.lastActiveTransactionDate,
+                 account.isDormancyTrackingActive, account.daysToInactive, account.daysToDormancy, account.daysToEscheat,
+-                account.savingsAmountOnHold);
++                account.savingsAmountOnHold, account.clientDateOfBirth);
+     }
+ 
+     public static SavingsAccountData withClientTemplate(final Long clientId, final String clientName, final Long groupId,
+@@ -800,6 +805,7 @@ public final class SavingsAccountData implements Serializable {
+         final Integer daysToDormancy = null;
+         final Integer daysToEscheat = null;
+         final BigDecimal savingsAmountOnHold = null;
++        final LocalDate clientDateOfBirth = null;
+ 
+         return new SavingsAccountData(id, accountNo, depositType, externalId, groupId, groupName, clientId, clientName, productId,
+                 productName, fieldOfficerId, fieldOfficerName, status, subStatus, reasonForBlock, timeline, currency,
+@@ -810,7 +816,7 @@ public final class SavingsAccountData implements Serializable {
+                 lockinPeriodFrequencyTypeOptions, withdrawalFeeTypeOptions, charges, chargeOptions, allowOverdraft, overdraftLimit,
+                 minRequiredBalance, enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation,
+                 onHoldFunds, nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroup,
+-                lastActiveTransactionDate, isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold);
++                lastActiveTransactionDate, isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold, clientDateOfBirth);
+     }
+ 
+     private SavingsAccountData(final Long id, final String accountNo, final EnumOptionData depositType, final String externalId,
+@@ -834,7 +840,7 @@ public final class SavingsAccountData implements Serializable {
+             final BigDecimal onHoldFunds, final BigDecimal nominalAnnualInterestRateOverdraft,
+             final BigDecimal minOverdraftForInterestCalculation, final boolean withHoldTax, final TaxGroupData taxGroup,
+             final LocalDate lastActiveTransactionDate, final boolean isDormancyTrackingActive, final Integer daysToInactive,
+-            final Integer daysToDormancy, final Integer daysToEscheat, final BigDecimal savingsAmountOnHold) {
++            final Integer daysToDormancy, final Integer daysToEscheat, final BigDecimal savingsAmountOnHold, final LocalDate clientDateOfBirth) {
+         this.id = id;
+         this.accountNo = accountNo;
+         this.depositType = depositType;
+@@ -899,6 +905,8 @@ public final class SavingsAccountData implements Serializable {
+         this.daysToDormancy = daysToDormancy;
+         this.daysToEscheat = daysToEscheat;
+         this.savingsAmountOnHold = savingsAmountOnHold;
++
++        this.clientDateOfBirth = clientDateOfBirth;
+     }
+ 
+     private SavingsAccountChargeData calculateWithdrawalFee() {
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsApiSetConstants.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsApiSetConstants.java
+index b74a7aca1..ad6101ac9 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsApiSetConstants.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsApiSetConstants.java
+@@ -49,7 +49,7 @@ public class SavingsApiSetConstants extends SavingsApiConstants {
+      */
+     public static final Set<String> SAVINGS_ACCOUNT_RESPONSE_DATA_PARAMETERS = new HashSet<>(Arrays.asList(idParamName,
+             accountNoParamName, externalIdParamName, statusParamName, activatedOnDateParamName, staffIdParamName, clientIdParamName,
+-            "clientName", groupIdParamName, "groupName", "savingsProductId", "savingsProductName", "currency",
++            "clientName", "clientDateOfBirth", groupIdParamName, "groupName", "savingsProductId", "savingsProductName", "currency",
+             nominalAnnualInterestRateParamName, interestCompoundingPeriodTypeParamName, interestCalculationTypeParamName,
+             interestCalculationDaysInYearTypeParamName, minRequiredOpeningBalanceParamName, lockinPeriodFrequencyParamName,
+             lockinPeriodFrequencyTypeParamName, withdrawalFeeAmountParamName, withdrawalFeeTypeParamName,
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
+index c86c82390..46b93b707 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
+@@ -589,6 +589,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+                     final boolean enforceMinRequiredBalance = rs.getBoolean("enforceMinRequiredBalance");
+                     final BigDecimal maxAllowedLienLimit = JdbcSupport.getBigDecimalDefaultToNullIfZero(rs, "maxAllowedLienLimit");
+                     final boolean lienAllowed = rs.getBoolean("lienAllowed");
++                    final LocalDate clientDateOfBirth = null;
+                     savingsAccountData = SavingsAccountData.instance(id, accountNo, depositType, externalId, null, null, null, null,
+                             productId, null, null, null, status, subStatus, null, timeline, currency, nominalAnnualInterestRate,
+                             interestCompoundingPeriodType, interestPostingPeriodType, interestCalculationType,
+@@ -597,7 +598,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+                             enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation, onHoldFunds,
+                             nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroupData,
+                             lastActiveTransactionDate, isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat,
+-                            onHoldAmount);
++                            onHoldAmount, clientDateOfBirth);
+ 
+                     savingsAccountData.setClientData(clientData);
+                     savingsAccountData.setGroupGeneralData(groupGeneralData);
+@@ -757,6 +758,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+             sqlBuilder.append("sa.id as id, sa.account_no as accountNo, sa.external_id as externalId, ");
+             sqlBuilder.append("sa.deposit_type_enum as depositType, ");
+             sqlBuilder.append("c.id as clientId, c.display_name as clientName, ");
++            sqlBuilder.append("c.date_of_birth as clientDateOfBirth, ");
+             sqlBuilder.append("g.id as groupId, g.display_name as groupName, ");
+             sqlBuilder.append("sp.id as productId, sp.name as productName, ");
+             sqlBuilder.append("s.id fieldOfficerId, s.display_name as fieldOfficerName, ");
+@@ -1068,6 +1070,11 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+             final boolean withHoldTax = rs.getBoolean("withHoldTax");
+             final Long taxGroupId = JdbcSupport.getLong(rs, "taxGroupId");
+             final String taxGroupName = rs.getString("taxGroupName");
++
++            final LocalDate clientDateOfBirth = rs.getDate("clientDateOfBirth") != null
++                    ? rs.getDate("clientDateOfBirth").toLocalDate()
++                    : null;
++
+             TaxGroupData taxGroupData = null;
+             if (taxGroupId != null) {
+                 taxGroupData = TaxGroupData.lookup(taxGroupId, taxGroupName);
+@@ -1080,7 +1087,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+                     withdrawalFeeForTransfers, summary, allowOverdraft, overdraftLimit, minRequiredBalance, enforceMinRequiredBalance,
+                     maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation, onHoldFunds, nominalAnnualInterestRateOverdraft,
+                     minOverdraftForInterestCalculation, withHoldTax, taxGroupData, lastActiveTransactionDate, isDormancyTrackingActive,
+-                    daysToInactive, daysToDormancy, daysToEscheat, onHoldAmount);
++                    daysToInactive, daysToDormancy, daysToEscheat, onHoldAmount, clientDateOfBirth);
+         }
+     }
+ 
+@@ -1658,6 +1665,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+             final Integer daysToInactive = null;
+             final Integer daysToDormancy = null;
+             final Integer daysToEscheat = null;
++            final LocalDate clientDateOfBirth = null;
+ 
+             final SavingsAccountApplicationTimelineData timeline = SavingsAccountApplicationTimelineData.templateDefault();
+             final EnumOptionData depositType = null;
+@@ -1668,7 +1676,7 @@ public class SavingsAccountReadPlatformServiceImpl implements SavingsAccountRead
+                     withdrawalFeeForTransfers, summary, allowOverdraft, overdraftLimit, minRequiredBalance, enforceMinRequiredBalance,
+                     maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation, onHoldFunds, nominalAnnualInterestRateOverdraft,
+                     minOverdraftForInterestCalculation, withHoldTax, taxGroupData, lastActiveTransactionDate, isDormancyTrackingActive,
+-                    daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold);
++                    daysToInactive, daysToDormancy, daysToEscheat, savingsAmountOnHold, clientDateOfBirth);
+         }
+     }
+ 
+-- 
+2.39.3 (Apple Git-145)
+
+
+From cf6a75ecb4fb4b9fb1cc71d89335d89822ea292a Mon Sep 17 00:00:00 2001
+From: alissa-hs <ahsth3636@gmail.com>
+Date: Sat, 30 Aug 2025 15:53:13 -0400
+Subject: [PATCH 8/8] clean up imports and logs
+
+---
+ .../savings/api/SavingsAccountsApiResource.java          | 9 +--------
+ .../service/SavingsAccountReadPlatformServiceImpl.java   | 3 ---
+ 2 files changed, 1 insertion(+), 11 deletions(-)
+
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+index 6e078805b..9ecf51597 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/api/SavingsAccountsApiResource.java
+@@ -41,11 +41,8 @@ import jakarta.ws.rs.core.MediaType;
+ import jakarta.ws.rs.core.Response;
+ import jakarta.ws.rs.core.UriInfo;
+ import java.io.InputStream;
+-import java.time.LocalDate;
+ import java.time.Year;
+ import java.time.YearMonth;
+-import java.time.format.DateTimeFormatter;
+-
+ import lombok.RequiredArgsConstructor;
+ import org.apache.commons.lang3.StringUtils;
+ import org.apache.fineract.commands.domain.CommandWrapper;
+@@ -77,11 +74,9 @@ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.springframework.stereotype.Component;
+ import org.springframework.util.CollectionUtils;
+-import java.time.format.DateTimeParseException;
+ import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.HashSet;
+-import java.util.Locale;
+ import java.util.Set;
+ 
+ @Path("/v1/savingsaccounts")
+@@ -142,9 +137,7 @@ public class SavingsAccountsApiResource {
+             @QueryParam("dayOfBirth") @Parameter(description = "dayOfBirth") final Integer dayOfBirth,
+             @QueryParam("monthOfBirth") @Parameter(description = "monthOfBirth") final Integer monthOfBirth
+     ) throws IllegalArgumentException {
+-
+-        log.error("***** retrieveAll API called *****");
+-        log.error("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}, monthOfBirth: {}",
++        log.info("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}, monthOfBirth: {}",
+                 sqlSearch, externalId, offset, limit, orderBy, sortOrder, dayOfBirth, monthOfBirth);
+ 
+         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
+diff --git a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
+index 46b93b707..c00c3860d 100644
+--- a/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
++++ b/fineract-provider/src/main/java/org/apache/fineract/portfolio/savings/service/SavingsAccountReadPlatformServiceImpl.java
+@@ -22,7 +22,6 @@ import java.math.BigDecimal;
+ import java.sql.ResultSet;
+ import java.sql.SQLException;
+ import java.time.LocalDate;
+-import java.time.format.DateTimeFormatter;
+ import java.time.temporal.ChronoUnit;
+ import java.util.ArrayList;
+ import java.util.Arrays;
+@@ -30,8 +29,6 @@ import java.util.Collection;
+ import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.List;
+-import java.util.Locale;
+-
+ import org.apache.commons.lang3.StringUtils;
+ import org.apache.fineract.accounting.common.AccountingRuleType;
+ import org.apache.fineract.accounting.glaccount.data.GLAccountData;
+-- 
+2.39.3 (Apple Git-145)
+
