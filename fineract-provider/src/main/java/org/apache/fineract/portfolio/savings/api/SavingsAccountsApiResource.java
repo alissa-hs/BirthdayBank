@@ -41,11 +41,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import java.io.InputStream;
-import java.time.LocalDate;
 import java.time.Year;
 import java.time.YearMonth;
-import java.time.format.DateTimeFormatter;
-
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.domain.CommandWrapper;
@@ -77,11 +74,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
-import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Set;
 
 @Path("/v1/savingsaccounts")
@@ -142,9 +137,7 @@ public class SavingsAccountsApiResource {
             @QueryParam("dayOfBirth") @Parameter(description = "dayOfBirth") final Integer dayOfBirth,
             @QueryParam("monthOfBirth") @Parameter(description = "monthOfBirth") final Integer monthOfBirth
     ) throws IllegalArgumentException {
-
-        log.error("***** retrieveAll API called *****");
-        log.error("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}, monthOfBirth: {}",
+        log.info("Received query params -> sqlSearch: {}, externalId: {}, offset: {}, limit: {}, orderBy: {}, sortOrder: {}, dateOfBirth: {}, monthOfBirth: {}",
                 sqlSearch, externalId, offset, limit, orderBy, sortOrder, dayOfBirth, monthOfBirth);
 
         context.authenticatedUser().validateHasReadPermission(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
